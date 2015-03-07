@@ -27,8 +27,45 @@ class GpgAgent < Formula
     system "make", "install"
   end
 
+  def caveats; <<-EOS.undent
+      To replace ssh-agent with gpg-agent, you need to:
+         * ensure that "enable-ssh-support" is in ~/.gnupg/gpg-agent.conf
+         * ensure that "pinentry" in ~/.gnupg/gpg-agent.conf has a graphical PIN entry
+           such as pinentry-mac (needed for GUI programs)
+         * disable the system ssh-agent with
+             launchctl unload -w /System/Library/LaunchAgents/org.openssh.ssh-agent.plist
+         * have launchd start gpg-agent at login
+    EOS
+  end
+
   test do
     system "#{bin}/gpg-agent", "--help"
+  end
+
+  def plist; <<-EOS.undent
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>#{plist_name}</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>#{opt_prefix}/bin/gpg-agent</string>
+            <string>-l</string>
+            <string>--daemon</string>
+        </array>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>StandardErrorPath</key>
+        <string>/dev/null</string>
+        <key>StandardOutPath</key>
+        <string>/dev/null</string>
+        <key>ServiceDescription</key>
+        <string>Run gpg-agent at login</string>
+    </dict>
+    </plist>
+    EOS
   end
 end
 
