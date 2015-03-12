@@ -1,8 +1,14 @@
 class GpgAgent < Formula
   homepage "https://www.gnupg.org/"
-  url "ftp://ftp.gnupg.org/gcrypt/gnupg/gnupg-2.0.26.tar.bz2"
-  mirror "ftp://ftp.mirrorservice.org/sites/ftp.gnupg.org/gcrypt/gnupg/gnupg-2.0.26.tar.bz2"
-  sha1 "3ff5b38152c919724fd09cf2f17df704272ba192"
+  url "ftp://ftp.gnupg.org/gcrypt/gnupg/gnupg-2.0.27.tar.bz2"
+  mirror "ftp://ftp.mirrorservice.org/sites/ftp.gnupg.org/gcrypt/gnupg/gnupg-2.0.27.tar.bz2"
+  sha1 "d065be185f5bac8ea07b210ab7756e79b83b63d4"
+
+  bottle do
+    sha256 "1e516200de1786beeb5de9dbc14e18db0794914a8d931ecc7af0e6c37a4545ed" => :yosemite
+    sha256 "5e2619d61dbe587c0a457937887a8555ed87b6e52abe17ef55af454a5ce5ca72" => :mavericks
+    sha256 "3897518fdb9d4b9a159a9e29d64fef1a515ebac83c3b5fce1a45ab3bb5e534dc" => :mountain_lion
+  end
 
   depends_on "libgpg-error"
   depends_on "libgcrypt"
@@ -10,7 +16,7 @@ class GpgAgent < Formula
   depends_on "libassuan"
   depends_on "pth"
   depends_on "pinentry"
-  
+
   # Adjust package name to fit our scheme of packaging both
   # gnupg 1.x and 2.x, and gpg-agent separately
   patch :DATA
@@ -33,7 +39,7 @@ class GpgAgent < Formula
          * ensure that "pinentry" in ~/.gnupg/gpg-agent.conf has a graphical PIN entry
            such as pinentry-mac (needed for GUI programs)
          * disable the system ssh-agent with
-             launchctl unload -w /System/Library/LaunchAgents/org.openssh.ssh-agent.plist
+             launchctl unload -w /System/Library/LaunchAgents/org.openbsd.ssh-agent.plist
          * have launchd start gpg-agent at login
     EOS
   end
@@ -51,9 +57,9 @@ class GpgAgent < Formula
         <string>#{plist_name}</string>
         <key>ProgramArguments</key>
         <array>
-            <string>#{opt_prefix}/bin/gpg-agent</string>
-            <string>-l</string>
-            <string>--daemon</string>
+            <string>/bin/sh</string>
+            <string>-c</string>
+            <string>#{opt_prefix}/bin/gpg-agent -c --daemon | /bin/launchctl</string>
         </array>
         <key>RunAtLoad</key>
         <true/>
@@ -70,112 +76,11 @@ class GpgAgent < Formula
 end
 
 __END__
-diff --git a/agent/gpg-agent.c b/agent/gpg-agent.c
-index bf2a26d..7fe2586 100644
---- a/agent/gpg-agent.c
-+++ b/agent/gpg-agent.c
-@@ -67,6 +67,7 @@ enum cmd_and_opt_values
-   oQuiet	  = 'q',
-   oSh		  = 's',
-   oVerbose	  = 'v',
-+  oLaunchdSupport = 'l',
-
-   oNoVerbose = 500,
-   aGPGConfList,
-@@ -200,6 +201,7 @@ static ARGPARSE_OPTS opts[] = {
-   },
-   { oWriteEnvFile, "write-env-file", 2|8,
-             N_("|FILE|write environment settings also to FILE")},
-+  { oLaunchdSupport, "launchd", 0, N_("launchd/launchctl support")},
-   {0}
- };
-
-@@ -604,6 +606,7 @@ main (int argc, char **argv )
-   gpg_error_t err;
-   const char *env_file_name = NULL;
-   struct assuan_malloc_hooks malloc_hooks;
-+  int launchd_support = 0;
-
-   /* Before we do anything else we save the list of currently open
-      file descriptors and the signal mask.  This info is required to
-@@ -855,6 +858,10 @@ main (int argc, char **argv )
-             env_file_name = make_filename ("~/.gpg-agent-info", NULL);
-           break;
-
-+        case oLaunchdSupport:
-+          launchd_support = 1;
-+          break;
-+
-         default : pargs.err = configfp? 1:2; break;
- 	}
-     }
-@@ -1221,6 +1228,61 @@ main (int argc, char **argv )
-             }
-           else
-             {
-+              /* Use launchctl to update launchd environmental variables.
-+                 This allows GUI programs/spotlight launched programs to
-+                 access them */
-+              if (launchd_support)
-+              {
-+                pid_t launchctl_pid;
-+                char launchctl[] = "/bin/launchctl";
-+                if ((launchctl_pid = fork()) == 0)
-+                {
-+                  char * p_infostr_var = strsep(&infostr, "=");
-+                  char * const launchctl_argv[] = { launchctl, "setenv", p_infostr_var, infostr, NULL };
-+                  if (execv(launchctl, launchctl_argv) < 0) {
-+                    log_error("failed to set launchd environment: %s\n", strerror(errno));
-+                    kill(pid, SIGTERM);
-+                    exit(1);
-+                  }
-+                } else if (launchctl_pid < 0) {
-+                  log_error("failed to set launchd environment: %s\n", strerror(errno));
-+                  kill(pid, SIGTERM);
-+                  exit(1);
-+                }
-+                if (opt.ssh_support)
-+                {
-+                  if ((launchctl_pid = fork()) == 0)
-+                  {
-+                    char * p_infostr_ssh_sock_var = strsep(&infostr_ssh_sock, "=");
-+                    char * const launchctl_argv[] = { launchctl, "setenv", p_infostr_ssh_sock_var, infostr_ssh_sock,
-+                                                      NULL };
-+                    if (execv(launchctl, launchctl_argv) < 0) {
-+                      log_error("failed to set launchd environment: %s\n", strerror(errno));
-+                      kill(pid, SIGTERM);
-+                      exit(1);
-+                    }
-+                  } else if (launchctl_pid < 0) {
-+                    log_error("failed to set launchd environment: %s\n", strerror(errno));
-+                    kill(pid, SIGTERM);
-+                    exit(1);
-+                  }
-+                  if ((launchctl_pid = fork()) == 0)
-+                  {
-+                    char * p_infostr_ssh_pid_var = strsep(&infostr_ssh_pid, "=");
-+                    char * const launchctl_argv[] = { launchctl, "setenv", p_infostr_ssh_pid_var, infostr_ssh_pid,
-+                                                      NULL };
-+                    if (execv(launchctl, launchctl_argv) < 0) {
-+                      log_error("failed to set launchd environment: %s\n", strerror(errno));
-+                      kill(pid, SIGTERM);
-+                      exit(1);
-+                    }
-+                  } else if (launchctl_pid < 0) {
-+                    log_error("failed to set launchd environment: %s\n", strerror(errno));
-+                    kill(pid, SIGTERM);
-+                    exit(1);
-+                  }
-+                }
-+              }
-               /* Print the environment string, so that the caller can use
-                  shell's eval to set it */
-               if (csh_style)
 diff --git a/configure b/configure
-index c022805..29d1742 100755
+index c022805..96ea7ed 100755
 --- a/configure
 +++ b/configure
-@@ -578,10 +578,10 @@ MFLAGS=
+@@ -578,8 +578,8 @@ MFLAGS=
  MAKEFLAGS=
 
  # Identity of this package.
@@ -183,8 +88,6 @@ index c022805..29d1742 100755
 -PACKAGE_TARNAME='gnupg'
 +PACKAGE_NAME='gpg-agent'
 +PACKAGE_TARNAME='gpg-agent'
- PACKAGE_VERSION='2.0.26'
--PACKAGE_STRING='gnupg 2.0.26'
-+PACKAGE_STRING='gpg-agent 2.0.26'
+ PACKAGE_VERSION='2.0.27'
+ PACKAGE_STRING='gnupg 2.0.27'
  PACKAGE_BUGREPORT='http://bugs.gnupg.org'
- PACKAGE_URL=''
