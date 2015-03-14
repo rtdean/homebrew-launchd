@@ -91,3 +91,16 @@ index c022805..96ea7ed 100755
  PACKAGE_VERSION='2.0.27'
  PACKAGE_STRING='gnupg 2.0.27'
  PACKAGE_BUGREPORT='http://bugs.gnupg.org'
+diff --git a/agent/gpg-agent.c b/agent/gpg-agent.c
+index bf2a26d..0d5c7ff 100644
+--- a/agent/gpg-agent.c
++++ b/agent/gpg-agent.c
+@@ -1226,7 +1226,7 @@ main (int argc, char **argv )
+               if (csh_style)
+                 {
+                   *strchr (infostr, '=') = ' ';
+-                  printf ("setenv %s;\n", infostr);
++                  printf ("setenv %s\n", infostr);
+                  if (opt.ssh_support)
+                    {
+                      *strchr (infostr_ssh_sock, '=') = ' ';
