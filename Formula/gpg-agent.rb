@@ -1,4 +1,4 @@
-class GpgAgent < Formula
+∑class GpgAgent < Formula
   homepage "https://www.gnupg.org/"
   url "ftp://ftp.gnupg.org/gcrypt/gnupg/gnupg-2.0.27.tar.bz2"
   mirror "ftp://ftp.mirrorservice.org/sites/ftp.gnupg.org/gcrypt/gnupg/gnupg-2.0.27.tar.bz2"
@@ -95,6 +95,6 @@ index bf2a26d..0d5c7ff 100644
                    *strchr (infostr, '=') = ' ';
 -                  printf ("setenv %s;\n", infostr);
 +                  printf ("setenv %s\n", infostr);
-                  if (opt.ssh_support)
-                    {
-                      *strchr (infostr_ssh_sock, '=') = ' ';
+ 		  if (opt.ssh_support)
+ 		    {
+ 		      *strchr (infostr_ssh_sock, '=') = ' ';
